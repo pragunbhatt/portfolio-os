@@ -8,6 +8,8 @@ import Window from './Window';
 import LockScreen from './LockScreen';
 import { AppIcon } from './icons';
 import { profile } from '../content';
+import Widgets from './Widgets';
+import Launchpad from './Launchpad';
 
 function useCompact() {
   const [compact, setCompact] = useState(() => window.matchMedia('(max-width: 767px)').matches);
@@ -32,13 +34,13 @@ function useDarkMode() {
   return appearance === 'auto' ? sysDark : appearance === 'dark';
 }
 
-export function useWallpaperStyle(): React.CSSProperties {
+export function useWallpaperStyle(theme: 'dark' | 'light' = 'dark'): React.CSSProperties {
   const choice = useOS((s) => s.settings.wallpaper);
   if (choice.kind === 'custom') {
     return { backgroundImage: `url(${choice.dataUrl})`, backgroundSize: 'cover', backgroundPosition: 'center' };
   }
   const w = wallpapers.find((x) => x.id === choice.id) ?? wallpapers[0];
-  return { background: wallpaperCss(w) };
+  return { background: wallpaperCss(w, theme) };
 }
 
 function Welcome({ onOpen }: { onOpen: () => void }) {
@@ -99,11 +101,15 @@ export default function Desktop({ visible, autoUnlock, onLock }: { visible: bool
   const windows = useOS((s) => s.windows);
   const accent = useOS((s) => s.settings.accent);
   const dockSize = useOS((s) => s.settings.dockSize);
+  const glass = useOS((s) => s.settings.glass);
+  const brightness = useOS((s) => s.settings.brightness);
+  const showWidgets = useOS((s) => s.settings.widgets);
   const compact = useCompact();
   const dark = useDarkMode();
-  const bg = useWallpaperStyle();
+  const bg = useWallpaperStyle(dark ? 'dark' : 'light');
   const wallChoice = useOS((s) => s.settings.wallpaper);
-  const wallDark = wallChoice.kind === 'custom' || (wallpapers.find((w) => w.id === wallChoice.id)?.dark ?? true);
+  const wallDef = wallChoice.kind === 'preset' ? wallpapers.find((w) => w.id === wallChoice.id) : undefined;
+  const wallDark = wallChoice.kind === 'custom' || (wallDef?.svg ? dark : (wallDef?.dark ?? true));
   const [welcomed, setWelcomed] = useState(false);
   const unlocked = phase === 'desktop';
 
@@ -112,6 +118,7 @@ export default function Desktop({ visible, autoUnlock, onLock }: { visible: bool
       className={`os ${unlocked ? 'is-unlocked' : 'is-locked'} ${compact ? 'is-compact' : ''}`}
       data-theme={dark ? 'dark' : 'light'}
       data-wall={wallDark ? 'dark' : 'light'}
+      data-glass={glass}
       style={{ '--accent': accent, '--dock-size': `${dockSize}px` } as React.CSSProperties}
       aria-hidden={!visible || undefined}
       inert={!visible || undefined}
@@ -120,16 +127,18 @@ export default function Desktop({ visible, autoUnlock, onLock }: { visible: bool
       {unlocked && (
         <>
           <MenuBar onLock={onLock} />
-          {compact && <HomeGrid />}
+          {compact ? <HomeGrid /> : showWidgets && <Widgets />}
           <main className="win-layer" aria-label="Open windows">
             {(Object.keys(windows) as AppId[]).map((id) => (
               <Window key={id} id={id} />
             ))}
           </main>
           {!compact && <Dock />}
+          <Launchpad />
           {!welcomed && <Welcome onOpen={() => { setWelcomed(true); launchApp('about'); }} />}
         </>
       )}
+      <div className="brightness" style={{ opacity: (1 - brightness) * 0.75 }} aria-hidden="true" />
       {phase !== 'desktop' && (
         <LockScreen
           interactive={phase === 'lock'}

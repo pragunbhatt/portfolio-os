@@ -9,6 +9,7 @@ export default function Contact() {
   const [body, setBody] = useState('');
   const [error, setError] = useState('');
   const [sent, setSent] = useState(false);
+  const [flying, setFlying] = useState(false);
   const { copied, copy } = useCopy();
   const bodyId = useId();
   const errId = useId();
@@ -21,16 +22,26 @@ export default function Contact() {
     }
     setError('');
     const url = `mailto:${profile.email}?subject=${encodeURIComponent(subject || 'Hello from your portfolio')}&body=${encodeURIComponent(body)}`;
-    window.location.href = url;
-    setSent(true);
+    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    setFlying(true);
+    window.setTimeout(
+      () => {
+        window.location.href = url;
+        setFlying(false);
+        setSent(true);
+      },
+      reduce ? 0 : 950,
+    );
   };
 
   return (
     <div className="mail">
       <Toolbar className="mail-toolbar" title={subject || 'New Message'}>
-        <button type="button" className="tb-btn tb-send" onClick={send} aria-label="Send message" data-no-drag>
-          <Glyph.Send />
-        </button>
+        <div className="tb-group" data-no-drag>
+          <button type="button" className="tb-btn tb-send" onClick={send} aria-label="Send message">
+            <Glyph.Send />
+          </button>
+        </div>
       </Toolbar>
       {sent ? (
         <div className="mail-sent">
@@ -61,7 +72,7 @@ export default function Contact() {
         </div>
       ) : (
         <form
-          className="mail-form"
+          className={`mail-form ${flying ? 'is-flying' : ''}`}
           onSubmit={(e) => {
             e.preventDefault();
             send();
@@ -96,6 +107,11 @@ export default function Contact() {
             aria-invalid={Boolean(error)}
             aria-describedby={error ? errId : undefined}
           />
+          {flying && (
+            <div className="mail-plane" aria-hidden="true">
+              <Glyph.Send size={34} />
+            </div>
+          )}
           <div className="mail-foot">
             {error ? (
               <p id={errId} className="mail-error" role="alert">

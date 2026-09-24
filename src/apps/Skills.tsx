@@ -3,6 +3,22 @@ import { skillGroups } from '../content';
 import { Toolbar } from '../os/WindowChrome';
 import { Glyph } from '../os/icons';
 
+const NOW_YEAR = new Date().getFullYear() + new Date().getMonth() / 12;
+const MAX_YEARS = Math.max(...skillGroups.flatMap((g) => g.skills.map((s) => NOW_YEAR - Number(s.since))));
+
+function yearsLabel(since: string) {
+  const y = NOW_YEAR - Number(since);
+  if (y < 1) return 'Under a year';
+  const whole = Math.floor(y);
+  return `${whole} ${whole === 1 ? 'year' : 'years'}`;
+}
+
+function hueOf(name: string) {
+  let h = 0;
+  for (const ch of name) h = (h * 31 + ch.charCodeAt(0)) % 360;
+  return h;
+}
+
 export default function Skills() {
   const [group, setGroup] = useState<string>('all');
   const [query, setQuery] = useState('');
@@ -57,17 +73,29 @@ export default function Skills() {
                   <tr>
                     <th scope="col">Name</th>
                     <th scope="col">Used for</th>
-                    <th scope="col" className="si-num">
-                      Since
+                    <th scope="col" className="si-exp">
+                      Using it for
                     </th>
                   </tr>
                 </thead>
                 <tbody>
                   {g.skills.map((s) => (
                     <tr key={s.name}>
-                      <td className="si-name">{s.name}</td>
+                      <td className="si-name">
+                        <span className="si-chip" style={{ '--h': hueOf(s.name) } as React.CSSProperties} aria-hidden="true">
+                          {s.name.slice(0, 2)}
+                        </span>
+                        {s.name}
+                      </td>
                       <td>{s.usedFor}</td>
-                      <td className="si-num">{s.since}</td>
+                      <td className="si-exp">
+                        <span className="si-exp-inner">
+                          <span className="si-bar" aria-hidden="true">
+                            <span style={{ width: `${Math.max(6, ((NOW_YEAR - Number(s.since)) / MAX_YEARS) * 100)}%` }} />
+                          </span>
+                          <span className="si-years">{yearsLabel(s.since)}</span>
+                        </span>
+                      </td>
                     </tr>
                   ))}
                 </tbody>

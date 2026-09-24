@@ -75,7 +75,7 @@ export default function Browser() {
   return (
     <div className="browser">
       <Toolbar className="br-toolbar">
-        <div className="br-nav" data-no-drag>
+        <div className="br-nav tb-group" data-no-drag>
           <button type="button" className="tb-btn" onClick={() => step(-1)} disabled={index === 0} aria-label="Back">
             <Glyph.ChevronLeft />
           </button>
@@ -108,7 +108,7 @@ export default function Browser() {
           />
           {loading && <span className="br-progress" aria-hidden="true" />}
         </form>
-        <div className="br-nav" data-no-drag>
+        <div className="br-nav tb-group" data-no-drag>
           <button type="button" className="tb-btn" onClick={() => setReloadKey((k) => k + 1)} disabled={current === START} aria-label="Reload page">
             <Glyph.Reload />
           </button>

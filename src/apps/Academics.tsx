@@ -1,13 +1,42 @@
+import { useEffect, useState } from 'react';
 import { academics } from '../content';
 import { useInView } from './useCopy';
 
+function useCountUp(target: number, run: boolean, ms = 1400) {
+  const [v, setV] = useState(0);
+  useEffect(() => {
+    if (!run) return;
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      setV(target);
+      return;
+    }
+    let raf = 0;
+    const t0 = performance.now();
+    const tick = (t: number) => {
+      const k = Math.min(1, (t - t0) / ms);
+      setV(target * (1 - Math.pow(1 - k, 4)));
+      if (k < 1) raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [target, run, ms]);
+  return v;
+}
+
 function Gauge({ value, max, animate }: { value: number; max: number; animate: boolean }) {
+  const shown = useCountUp(value, animate);
   const r = 58;
   const c = 2 * Math.PI * r;
   const arc = 0.75;
   const filled = (value / max) * arc;
   return (
     <svg className="gauge" viewBox="0 0 150 150" role="img" aria-label={`CGPA ${value} out of ${max}`}>
+      <defs>
+        <linearGradient id="gauge-grad" x1="0" y1="1" x2="1" y2="0">
+          <stop offset="0" stopColor="#ffb454" />
+          <stop offset="1" stopColor="#ffe08a" />
+        </linearGradient>
+      </defs>
       <circle cx="75" cy="75" r={r} className="gauge-track" strokeDasharray={`${c * arc} ${c}`} transform="rotate(135 75 75)" />
       <circle
         cx="75"
@@ -18,7 +47,7 @@ function Gauge({ value, max, animate }: { value: number; max: number; animate: b
         transform="rotate(135 75 75)"
       />
       <text x="75" y="80" textAnchor="middle" className="gauge-value">
-        {value.toFixed(2)}
+        {shown.toFixed(2)}
       </text>
       <text x="75" y="102" textAnchor="middle" className="gauge-label">
         out of {max}

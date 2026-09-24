@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { defaultWallpaper } from '../wallpapers';
 
 export type AppId =
+  | 'finder'
   | 'about'
   | 'academics'
   | 'projects'
@@ -27,6 +28,7 @@ export type Win = {
 export type Phase = 'desk' | 'lock' | 'desktop';
 export type Appearance = 'light' | 'dark' | 'auto';
 export type MinimizeEffect = 'genie' | 'scale';
+export type GlassStyle = 'clear' | 'tinted';
 export type WallpaperChoice = { kind: 'preset'; id: string } | { kind: 'custom'; dataUrl: string };
 
 export type Settings = {
@@ -36,6 +38,9 @@ export type Settings = {
   dockSize: number;
   magnify: boolean;
   minimizeEffect: MinimizeEffect;
+  glass: GlassStyle;
+  brightness: number;
+  widgets: boolean;
 };
 
 const SETTINGS_KEY = 'pb-os-settings';
@@ -47,6 +52,9 @@ const defaultSettings: Settings = {
   dockSize: 54,
   magnify: true,
   minimizeEffect: 'genie',
+  glass: 'clear',
+  brightness: 1,
+  widgets: true,
 };
 
 function loadSettings(): Settings {
@@ -74,6 +82,8 @@ type OSState = {
   bouncing: AppId | null;
   settings: Settings;
   pendingUrl: string | null;
+  launchpad: boolean;
+  setLaunchpad: (open: boolean) => void;
   setPhase: (p: Phase) => void;
   open: (id: AppId, rect: Rect) => void;
   close: (id: AppId) => void;
@@ -94,6 +104,8 @@ export const useOS = create<OSState>((set, get) => ({
   bouncing: null,
   settings: loadSettings(),
   pendingUrl: null,
+  launchpad: false,
+  setLaunchpad: (launchpad) => set({ launchpad }),
 
   setPhase: (phase) => set({ phase }),
 

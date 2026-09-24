@@ -3,7 +3,7 @@ import { dockIconEls, topWindowId, useOS, type AppId, type Rect } from './store'
 import { appById, isCompact, MENUBAR_H, workArea } from './registry';
 import { genieKeyframes, launchKeyframes, scaleKeyframes } from './genie';
 import { TrafficLights, WindowCtx, type WindowCtxValue } from './WindowChrome';
-import { prefersReducedMotion } from './motion';
+import { prefersReducedMotion, SPRING, SPRING_SOFT } from './motion';
 
 type Dir = 'n' | 's' | 'e' | 'w' | 'ne' | 'nw' | 'se' | 'sw';
 const DIRS: Dir[] = ['n', 's', 'e', 'w', 'ne', 'nw', 'se', 'sw'];
@@ -64,8 +64,8 @@ export default function Window({ id }: { id: AppId }) {
     const icon = dockIconEls.get(id)?.getBoundingClientRect() ?? null;
     const reduce = prefersReducedMotion();
     node.animate(reduce ? [{ opacity: 0 }, { opacity: 1 }] : launchKeyframes(win.rect, compact ? null : icon), {
-      duration: reduce ? 150 : 420,
-      easing: 'cubic-bezier(0.2, 0.9, 0.2, 1.04)',
+      duration: reduce ? 150 : 560,
+      easing: SPRING,
     });
     node.focus({ preventScroll: true });
     // Mount-only animation.
@@ -119,7 +119,7 @@ export default function Window({ id }: { id: AppId }) {
         { transform: `translate(${from.x - to.x}px, ${from.y - to.y}px) scale(${from.w / to.w}, ${from.h / to.h})` },
         { transform: 'none' },
       ],
-      { duration: 340, easing: 'cubic-bezier(0.2, 0.85, 0.25, 1)' },
+      { duration: 520, easing: SPRING_SOFT },
     );
     anim.onfinish = () => (node.style.transformOrigin = '');
   }, [win.rect]);

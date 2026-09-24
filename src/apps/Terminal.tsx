@@ -2,11 +2,13 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { academics, profile, projects, skillGroups } from '../content';
 import { launchApp } from '../os/Dock';
 import type { AppId } from '../os/store';
+import { rainEnabled, setRain } from '../os/rainSound';
 
 type Line = { id: number; kind: 'in' | 'out' | 'err'; text: ReactNode };
 
 const PROMPT = `${profile.githubHandle}@portfolio ~ %`;
 const APP_NAMES: Record<string, AppId> = {
+  finder: 'finder',
   about: 'about',
   academics: 'academics',
   projects: 'projects',
@@ -27,6 +29,7 @@ const HELP = [
   ['contact', 'how to reach me'],
   ['open <app>', 'open an app, e.g. open projects'],
   ['neofetch', 'system summary'],
+  ['rain', 'turn the rain sounds on or off'],
   ['ls', 'list files'],
   ['clear', 'clear the screen'],
 ];
@@ -112,6 +115,11 @@ function run(raw: string): { out: ReactNode[]; clear?: boolean; err?: boolean } 
           </span>,
         ],
       };
+    case 'rain': {
+      const on = !rainEnabled();
+      setRain(on);
+      return { out: [on ? 'Rain sounds on. It is raining outside the window too.' : 'Rain sounds off.'] };
+    }
     case 'date':
       return { out: [new Date().toString()] };
     case 'echo':

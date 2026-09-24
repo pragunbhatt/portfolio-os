@@ -2,8 +2,15 @@ import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { RectAreaLightUniformsLib } from 'three/examples/jsm/lights/RectAreaLightUniformsLib.js';
-import { paintWallpaper, type Wallpaper } from '../wallpapers';
+import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
+import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
+import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
+import { createDust, createRainGlass, createSteam, GrainShader, stickyNote } from './atmosphere';
+import { loadWallpaper, paintWallpaper, type Wallpaper } from '../wallpapers';
 import { profile } from '../content';
+import { paintLockText } from '../lockPaint';
 
 const DESK_Y = 0.74;
 const SCREEN_W = 0.62;
@@ -101,6 +108,17 @@ function wallTexture(): THREE.CanvasTexture {
   return tex;
 }
 
+export type DeskObject = 'lamp' | 'monitor' | 'keyboard' | 'mouse' | 'headphones' | 'mug' | 'plant' | 'window' | 'note' | 'notebook';
+export type DeskEvent = { type: 'login' } | { type: 'rain' } | { type: 'key' } | { type: 'click' };
+
+const NOTES = [
+  ['git push', 'before bed'],
+  ['CGPA 9.35', 'keep it up'],
+  ['sem 3:', 'DSA grind'],
+  ['drink', 'water'],
+  ['ship the', 'portfolio'],
+];
+
 export class DeskScene {
   private renderer: THREE.WebGLRenderer;
   private scene = new THREE.Scene();
@@ -118,12 +136,50 @@ export class DeskScene {
   private aspect = 1;
   private fov = FOV;
   private disposables: { dispose: () => void }[] = [];
+  private composer: EffectComposer;
+  private bloom: UnrealBloomPass;
+  private grain: ShaderPass;
+  private clock = new THREE.Clock();
+  private rain!: ReturnType<typeof createRainGlass>;
+  private dust!: ReturnType<typeof createDust>;
+  private steam!: ReturnType<typeof createSteam>;
+  private windowLight!: THREE.RectAreaLight;
+  private hemi!: THREE.HemisphereLight;
+  private nextFlash = 14 + Math.random() * 14;
+  private flashStart = -10;
+  private reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  private pixelRatio = 1;
+  private caps!: THREE.InstancedMesh;
+  private keyBase: { pos: THREE.Vector3; quat: THREE.Quaternion; scale: THREE.Vector3; color: THREE.Color }[] = [];
+  private keyMap = new Map<string, number>();
+  private pressed = new Map<number, number>();
+  private tmpM = new THREE.Matrix4();
+  private tmpC = new THREE.Color();
+  private white = new THREE.Color('#ffffff');
+
+  // Interactive desk objects.
+  private raycaster = new THREE.Raycaster();
+  private ndc = new THREE.Vector2();
+  private targets: { id: DeskObject; root: THREE.Object3D }[] = [];
+  private lampOn = true;
+  private lampLevel = 1;
+  private lampFlickerAt = -10;
+  private lamp!: { spot: THREE.SpotLight; pool: THREE.PointLight; bulb: THREE.MeshBasicMaterial; cone: THREE.ShaderMaterial };
+  private objs: Partial<Record<DeskObject, THREE.Object3D>> = {};
+  private anim: Partial<Record<DeskObject, number>> = {};
+  private note!: ReturnType<typeof stickyNote>;
+  private noteIndex = 0;
+  private rainOn = false;
+  onDeskEvent: (e: DeskEvent) => void = () => {};
+  onFirstFrame: () => void = () => {};
+  private firstFrameDone = false;
 
   constructor(private canvas: HTMLCanvasElement, wallpaper: Wallpaper) {
     this.wallpaper = wallpaper;
     const mobile = window.matchMedia('(max-width: 767px)').matches;
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, mobile ? 1.5 : 2));
+    this.pixelRatio = Math.min(window.devicePixelRatio, mobile ? 1.5 : 2);
+    this.renderer.setPixelRatio(this.pixelRatio);
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.05;
@@ -150,8 +206,19 @@ export class DeskScene {
     this.disposables.push(this.screenTex);
 
     this.build();
+    for (const [id, root] of Object.entries(this.objs)) this.targets.push({ id: id as DeskObject, root: root! });
+
+    this.composer = new EffectComposer(this.renderer);
+    this.composer.addPass(new RenderPass(this.scene, this.camera));
+    this.bloom = new UnrealBloomPass(new THREE.Vector2(256, 256), 0.34, 0.6, 1.05);
+    this.composer.addPass(this.bloom);
+    this.composer.addPass(new OutputPass());
+    this.grain = new ShaderPass(GrainShader);
+    this.composer.addPass(this.grain);
+
     this.paintScreen();
     document.fonts?.ready.then(() => this.paintScreen());
+    loadWallpaper(wallpaper).then(() => this.paintScreen());
     let minute = new Date().getMinutes();
     this.clockTimer = window.setInterval(() => {
       const m = new Date().getMinutes();
@@ -194,7 +261,9 @@ export class DeskScene {
 
     // Desk
     const wood = this.track(woodTexture());
-    const deskMat = this.mat({ map: wood, roughness: 0.48, metalness: 0 });
+    const deskMat = this.track(
+      new THREE.MeshPhysicalMaterial({ map: wood, roughness: 0.5, metalness: 0, clearcoat: 0.35, clearcoatRoughness: 0.28 }),
+    );
     const desk = this.mesh(new RoundedBoxGeometry(2.3, 0.045, 0.95, 3, 0.008), deskMat);
     desk.position.set(0, DESK_Y - 0.0225, -0.12);
     s.add(desk);
@@ -218,10 +287,15 @@ export class DeskScene {
     this.buildPlant();
     this.buildMug();
     this.buildNotebook();
+    this.buildWindow();
+    this.buildStickyNote();
+    this.steam = createSteam(new THREE.Vector3(-0.36, DESK_Y + 0.085, 0.1));
+    this.disposables.push(this.steam);
+    s.add(this.steam.group);
 
     // Lights
-    const hemi = new THREE.HemisphereLight('#9fb4d9', '#2a1c14', 0.35);
-    s.add(hemi);
+    this.hemi = new THREE.HemisphereLight('#9fb4d9', '#2a1c14', 0.35);
+    s.add(this.hemi);
     const rim = new THREE.DirectionalLight('#9db6ff', 0.55);
     rim.position.set(1.8, 2.4, -0.2);
     s.add(rim);
@@ -272,6 +346,7 @@ export class DeskScene {
     group.add(foot);
 
     s.add(group);
+    this.objs.monitor = group;
 
     this.screenGlow = new THREE.RectAreaLight('#9fb4ff', 6, SCREEN_W, SCREEN_H);
     this.screenGlow.position.set(MONITOR_X, SCREEN_CY, MONITOR_Z + 0.02);
@@ -312,9 +387,11 @@ export class DeskScene {
     caps.receiveShadow = true;
     const m = new THREE.Matrix4();
     const q = new THREE.Quaternion();
-    const colors = { alpha: new THREE.Color('#e7e3da'), mod: new THREE.Color('#8e99a6'), accent: new THREE.Color('#ffae55') };
+    const colors = { alpha: new THREE.Color('#d6d2c8'), mod: new THREE.Color('#8e99a6'), accent: new THREE.Color('#ffae55') };
     let i = 0;
+    const rowStart: number[] = [];
     rows.forEach((row, r) => {
+      rowStart[r] = i;
       let x = -8 * u;
       const z = (r - 2.5) * u;
       const rowTilt = [0.12, 0.07, 0.03, 0, -0.03, -0.06][r];
@@ -322,14 +399,31 @@ export class DeskScene {
         const w = key.w * u - 0.0026;
         const cx = x + (key.w * u) / 2;
         q.setFromEuler(new THREE.Euler(rowTilt, 0, 0));
-        m.compose(new THREE.Vector3(cx, 0.031 + (r === 0 ? 0.0012 : 0), z), q, new THREE.Vector3(w, 0.011, u - 0.0028));
+        const pos = new THREE.Vector3(cx, 0.031 + (r === 0 ? 0.0012 : 0), z);
+        const scl = new THREE.Vector3(w, 0.011, u - 0.0028);
+        const color = key.kind === 'accent' ? colors.accent : key.kind === 'mod' ? colors.mod : colors.alpha;
+        m.compose(pos, q, scl);
         caps.setMatrixAt(i, m);
-        caps.setColorAt(i, key.kind === 'accent' ? colors.accent : key.kind === 'mod' ? colors.mod : colors.alpha);
+        caps.setColorAt(i, color);
+        this.keyBase[i] = { pos, quat: q.clone(), scale: scl, color: color.clone() };
         x += key.w * u;
         i++;
       }
     });
     group.add(caps);
+    this.caps = caps;
+
+    // Map characters to keycaps on this 75% layout.
+    const put = (chars: string, row: number, offset: number) =>
+      [...chars].forEach((ch, k) => this.keyMap.set(ch, rowStart[row] + offset + k));
+    put('`1234567890-=', 1, 0);
+    put('qwertyuiop[]', 2, 1);
+    put("asdfghjkl;'", 3, 1);
+    put('zxcvbnm,./', 4, 1);
+    this.keyMap.set(' ', rowStart[5] + 3);
+    this.keyMap.set('\n', rowStart[3] + 12);
+    this.keyMap.set('shift', rowStart[4]);
+    this.keyMap.set('backspace', rowStart[1] + 13);
 
     // Coiled-style cable heading toward the monitor.
     // The group is tilted, so lower the cable by z * tan(tilt) to keep it resting on the desk.
@@ -345,15 +439,17 @@ export class DeskScene {
     group.add(cable);
 
     s.add(group);
+    this.objs.keyboard = group;
   }
 
   private buildMouse() {
     const geo = new THREE.SphereGeometry(1, 40, 24);
-    const mouse = this.mesh(geo, this.mat({ color: '#e9e9ec', roughness: 0.28 }));
+    const mouse = this.mesh(geo, this.mat({ color: '#c9cace', roughness: 0.42 }));
     mouse.scale.set(0.031, 0.017, 0.056);
     mouse.position.set(0.43, DESK_Y + 0.006, 0.17);
     mouse.rotation.y = -0.12;
     this.scene.add(mouse);
+    this.objs.mouse = mouse;
   }
 
   private buildHeadphones() {
@@ -402,6 +498,7 @@ export class DeskScene {
       g.add(cushion);
     }
     s.add(g);
+    this.objs.headphones = g;
   }
 
   private buildLamp() {
@@ -434,11 +531,13 @@ export class DeskScene {
     head.position.copy(p2);
     const shade = this.mesh(new THREE.CylinderGeometry(0.028, 0.068, 0.11, 40, 1, true), this.track(new THREE.MeshStandardMaterial({ color: '#1a1b1f', metalness: 0.5, roughness: 0.4, side: THREE.DoubleSide })));
     head.add(shade);
-    const bulb = this.mesh(new THREE.SphereGeometry(0.024, 20, 16), this.track(new THREE.MeshBasicMaterial({ color: '#ffe2b0' })), false, false);
+    const bulbMat = this.track(new THREE.MeshBasicMaterial({ color: '#ffe2b0' }));
+    const bulb = this.mesh(new THREE.SphereGeometry(0.024, 20, 16), bulbMat, false, false);
     bulb.position.y = -0.03;
     head.add(bulb);
     g.add(head);
     s.add(g);
+    this.objs.lamp = g;
     // Aim the shade's open end (local -Y) at the pool of light on the desk.
     const aim = new THREE.Vector3(0.28, DESK_Y, 0.14);
     const headWorld = g.position.clone().add(p2);
@@ -447,7 +546,7 @@ export class DeskScene {
 
     const lampWorld = new THREE.Vector3();
     bulb.getWorldPosition(lampWorld);
-    const spot = new THREE.SpotLight('#ffb866', 9, 0, 0.78, 0.75, 1.6);
+    const spot = new THREE.SpotLight('#ffb866', 6.2, 0, 0.78, 0.8, 1.6);
     spot.position.copy(lampWorld);
     spot.target.position.copy(aim);
     spot.castShadow = true;
@@ -461,6 +560,95 @@ export class DeskScene {
     const pool = new THREE.PointLight('#ffb866', 0.6, 1.4, 2);
     pool.position.copy(lampWorld).add(new THREE.Vector3(0, -0.05, 0));
     s.add(pool);
+
+    // A faint volume of light under the shade, and dust turning in it.
+    const coneLen = lampWorld.distanceTo(aim);
+    const coneGeo = new THREE.ConeGeometry(Math.tan(0.62) * coneLen, coneLen, 48, 1, true);
+    coneGeo.translate(0, -coneLen / 2, 0);
+    const cone = this.mesh(
+      coneGeo,
+      this.track(
+        new THREE.ShaderMaterial({
+          transparent: true,
+          depthWrite: false,
+          blending: THREE.AdditiveBlending,
+          side: THREE.DoubleSide,
+          uniforms: { uLen: { value: coneLen }, uLevel: { value: 1 } },
+          vertexShader: `varying vec3 vP; varying vec3 vN; varying vec3 vV; void main(){ vP = position; vec4 mv = modelViewMatrix*vec4(position,1.0); vN = normalize(normalMatrix*normal); vV = normalize(-mv.xyz); gl_Position = projectionMatrix*mv; }`,
+          fragmentShader: `uniform float uLen; uniform float uLevel; varying vec3 vP; varying vec3 vN; varying vec3 vV; void main(){ float along = clamp(-vP.y/uLen,0.0,1.0); float rim = pow(abs(dot(vN,vV)),1.6); float a = (1.0-along)*0.05*rim*uLevel; gl_FragColor = vec4(1.0,0.78,0.5,a); }`,
+        }),
+      ),
+      false,
+      false,
+    );
+    cone.position.copy(lampWorld);
+    cone.quaternion.setFromUnitVectors(new THREE.Vector3(0, -1, 0), aim.clone().sub(lampWorld).normalize());
+    s.add(cone);
+
+    this.lamp = { spot, pool, bulb: bulbMat, cone: cone.material as THREE.ShaderMaterial };
+
+    this.dust = createDust(lampWorld, aim, 0.78);
+    this.disposables.push(this.dust);
+    s.add(this.dust.points);
+  }
+
+  private buildWindow() {
+    const s = this.scene;
+    const W = 0.84;
+    const H = 0.72;
+    const cx = 0.96;
+    const cy = DESK_Y + 0.2 + H / 2;
+    const z = -0.6;
+
+    this.rain = createRainGlass(W, H);
+    this.disposables.push(this.rain);
+    this.rain.mesh.position.set(cx, cy, z);
+    s.add(this.rain.mesh);
+    this.objs.window = this.rain.mesh;
+
+    const frameMat = this.mat({ color: '#1b1d22', roughness: 0.55, metalness: 0.4 });
+    const t = 0.034;
+    const d = 0.05;
+    const bar = (w: number, h: number, x: number, y: number, depth = d) => {
+      const m = this.mesh(new RoundedBoxGeometry(w, h, depth, 2, 0.004), frameMat);
+      m.position.set(x, y, z + depth / 2 - 0.005);
+      s.add(m);
+    };
+    bar(W + t * 2, t, cx, cy + H / 2 + t / 2);
+    bar(W + t * 2, t, cx, cy - H / 2 - t / 2);
+    bar(t, H, cx - W / 2 - t / 2, cy);
+    bar(t, H, cx + W / 2 + t / 2, cy);
+    bar(0.022, H, cx, cy, 0.035);
+    bar(W, 0.018, cx, cy + H * 0.08, 0.03);
+
+    const sill = this.mesh(new RoundedBoxGeometry(W + 0.14, 0.022, 0.1, 2, 0.006), this.mat({ color: '#d9d4cb', roughness: 0.7 }));
+    sill.position.set(cx, cy - H / 2 - t - 0.011, z + 0.04);
+    s.add(sill);
+
+    this.windowLight = new THREE.RectAreaLight('#7f9ccc', 1.6, W, H);
+    this.windowLight.position.set(cx, cy, z + 0.02);
+    this.windowLight.lookAt(cx - 0.4, cy - 0.4, z + 1.2);
+    s.add(this.windowLight);
+  }
+
+  private buildStickyNote() {
+    this.note = stickyNote(NOTES[0]);
+    const tex = this.track(this.note.tex);
+    const geo = new THREE.PlaneGeometry(0.075, 0.075, 8, 8);
+    // Curl the free corner forward like paper that's been stuck for a while.
+    const pos = geo.attributes.position;
+    for (let i = 0; i < pos.count; i++) {
+      const x = pos.getX(i) + 0.0375;
+      const y = 0.0375 - pos.getY(i);
+      pos.setZ(i, Math.pow(Math.max(0, x * y) / (0.075 * 0.075), 1.6) * 0.012);
+    }
+    geo.computeVertexNormals();
+    const note = this.mesh(geo, this.mat({ map: tex, roughness: 0.92, side: THREE.DoubleSide }), true, true);
+    const bodyW = SCREEN_W + 0.036;
+    note.position.set(MONITOR_X + bodyW / 2 + 0.022, SCREEN_CY + SCREEN_H / 2 - 0.05, MONITOR_Z + 0.0135);
+    note.rotation.z = -0.07;
+    this.scene.add(note);
+    this.objs.note = note;
   }
 
   private buildPlant() {
@@ -494,6 +682,7 @@ export class DeskScene {
       }
     });
     this.scene.add(g);
+    this.objs.plant = g;
   }
 
   private buildMug() {
@@ -515,6 +704,7 @@ export class DeskScene {
     handle.position.set(0.038, 0.048, 0);
     g.add(handle);
     this.scene.add(g);
+    this.objs.mug = g;
   }
 
   private buildNotebook() {
@@ -532,11 +722,13 @@ export class DeskScene {
     pen.position.set(0.11, 0.005, 0);
     g.add(pen);
     this.scene.add(g);
+    this.objs.notebook = g;
   }
 
   setWallpaper(w: Wallpaper) {
     this.wallpaper = w;
     this.paintScreen();
+    loadWallpaper(w).then(() => this.wallpaper === w && this.paintScreen());
   }
 
   private paintScreen() {
@@ -555,17 +747,9 @@ export class DeskScene {
     g.fillStyle = 'rgba(0,0,0,0.14)';
     g.fillRect(0, 0, W, H);
 
-    const now = new Date();
-    const date = now.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
-    const time = now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
-    const rounded = 'ui-rounded, "SF Pro Rounded", "Bricolage Grotesque", -apple-system, system-ui, sans-serif';
+    paintLockText(g, W, H);
+    const rounded = '"Inter", system-ui, sans-serif';
     g.textAlign = 'center';
-    g.fillStyle = 'rgba(255,255,255,0.92)';
-    g.font = `600 ${H * 0.042}px ${rounded}`;
-    g.fillText(date, W / 2, H * 0.16);
-    g.font = `700 ${H * 0.2}px ${rounded}`;
-    g.fillStyle = 'rgba(255,255,255,0.86)';
-    g.fillText(time, W / 2, H * 0.36);
 
     const ay = H * 0.72;
     const ar = H * 0.055;
@@ -597,6 +781,203 @@ export class DeskScene {
     this.screenTex.needsUpdate = true;
   }
 
+  private lightning(t: number) {
+    this.flashStart = t;
+    this.nextFlash = t + 18 + Math.random() * 26;
+    window.dispatchEvent(new CustomEvent('desk-lightning'));
+  }
+
+  private updateLamp(t: number) {
+    const target = this.lampOn ? 1 : 0;
+    this.lampLevel += (target - this.lampLevel) * 0.2;
+    let level = this.lampLevel;
+    // A warm LED stutters once before settling when it's switched on.
+    const f = t - this.lampFlickerAt;
+    if (this.lampOn && f < 0.28) level *= f < 0.06 ? 0.9 : f < 0.12 ? 0.15 : f < 0.18 ? 0.8 : Math.min(1, 0.4 + (f - 0.18) * 6);
+    this.lamp.spot.intensity = 6.2 * level;
+    this.lamp.pool.intensity = 0.6 * level;
+    this.lamp.bulb.color.setRGB(0.23 + 0.77 * level, 0.17 + 0.72 * level, 0.12 + 0.57 * level);
+    this.lamp.cone.uniforms.uLevel.value = level;
+    this.dust.material.uniforms.uLevel.value = level;
+  }
+
+  // 0..1 envelope for a short reaction started by a click.
+  private bump(id: DeskObject, t: number, dur = 0.9) {
+    const start = this.anim[id];
+    if (start === undefined) return 0;
+    const k = (t - start) / dur;
+    if (k >= 1 || k < 0) return 0;
+    return Math.sin(k * Math.PI);
+  }
+
+  private updateObjects(t: number) {
+    const mug = this.objs.mug;
+    if (mug) mug.position.y = DESK_Y + this.bump('mug', t) * 0.035;
+    const book = this.objs.notebook;
+    if (book) {
+      const b = this.bump('notebook', t, 0.55);
+      book.position.y = DESK_Y + b * 0.02;
+      book.rotation.z = b * 0.08;
+    }
+    const damped = (id: DeskObject, f: number, amp: number, decay: number) => {
+      const start = this.anim[id];
+      if (start === undefined) return 0;
+      const k = t - start;
+      return k < 2.5 ? Math.sin(k * f) * amp * Math.exp(-k * decay) : 0;
+    };
+    const plant = this.objs.plant;
+    if (plant) {
+      plant.rotation.z = damped('plant', 11, 0.08, 2.2);
+      plant.rotation.x = damped('plant', 8, 0.04, 2.2);
+    }
+    const note = this.objs.note;
+    if (note) note.rotation.y = damped('note', 14, 0.3, 4);
+    const mouse = this.objs.mouse;
+    if (mouse) mouse.position.x = 0.43 + this.bump('mouse', t, 0.35) * 0.012;
+    const hp = this.objs.headphones;
+    if (hp) hp.rotation.y = -0.5 + damped('headphones', 10, 0.07, 3);
+  }
+
+  setRainOn(on: boolean) {
+    this.rainOn = on;
+  }
+
+  private pick(clientX: number, clientY: number) {
+    const r = this.canvas.getBoundingClientRect();
+    this.ndc.set(((clientX - r.left) / r.width) * 2 - 1, -((clientY - r.top) / r.height) * 2 + 1);
+    this.raycaster.setFromCamera(this.ndc, this.camera);
+    const hits = this.raycaster.intersectObjects(
+      this.targets.map((x) => x.root),
+      true,
+    );
+    for (const h of hits) {
+      let o: THREE.Object3D | null = h.object;
+      while (o) {
+        const found = this.targets.find((x) => x.root === o);
+        if (found) return { id: found.id, hit: h };
+        o = o.parent;
+      }
+    }
+    return null;
+  }
+
+  interactive() {
+    return this.progress < 0.2;
+  }
+
+  // The label for whatever is under the pointer, or null.
+  hover(clientX: number, clientY: number): string | null {
+    if (!this.interactive()) return null;
+    const found = this.pick(clientX, clientY);
+    return found ? this.label(found.id) : null;
+  }
+
+  label(id: DeskObject): string {
+    switch (id) {
+      case 'lamp':
+        return this.lampOn ? 'Turn off the lamp' : 'Turn on the lamp';
+      case 'monitor':
+        return 'Log in';
+      case 'keyboard':
+        return 'Press a key';
+      case 'mouse':
+        return 'Click the mouse';
+      case 'headphones':
+        return this.rainOn ? 'Stop the rain sounds' : 'Listen to the rain';
+      case 'mug':
+        return 'Take a sip';
+      case 'plant':
+        return 'Brush the plant';
+      case 'window':
+        return 'Watch the storm';
+      case 'note':
+        return 'Read the next note';
+      case 'notebook':
+        return 'Nudge the notebook';
+    }
+  }
+
+  click(clientX: number, clientY: number): boolean {
+    if (!this.interactive()) return false;
+    const found = this.pick(clientX, clientY);
+    if (!found) return false;
+    if (found.id === 'keyboard' && found.hit.instanceId !== undefined) {
+      this.pressed.set(found.hit.instanceId, this.clock.getElapsedTime());
+      this.onDeskEvent({ type: 'key' });
+      return true;
+    }
+    this.activate(found.id);
+    return true;
+  }
+
+  activate(id: DeskObject) {
+    const t = this.clock.getElapsedTime();
+    this.anim[id] = t;
+    switch (id) {
+      case 'lamp':
+        this.lampOn = !this.lampOn;
+        if (this.lampOn) this.lampFlickerAt = t;
+        this.onDeskEvent({ type: 'click' });
+        break;
+      case 'monitor':
+        this.onDeskEvent({ type: 'login' });
+        break;
+      case 'keyboard':
+        [...'portfolio'].forEach((ch, i) =>
+          window.setTimeout(() => {
+            this.pressKey(ch);
+            this.onDeskEvent({ type: 'key' });
+          }, i * 70),
+        );
+        break;
+      case 'mouse':
+        this.onDeskEvent({ type: 'click' });
+        break;
+      case 'headphones':
+        this.onDeskEvent({ type: 'rain' });
+        break;
+      case 'window':
+        this.lightning(t);
+        break;
+      case 'note':
+        this.noteIndex = (this.noteIndex + 1) % NOTES.length;
+        this.note.setLines(NOTES[this.noteIndex]);
+        break;
+      default:
+        break;
+    }
+  }
+
+  pressKey(ch: string) {
+    const lower = ch.toLowerCase();
+    const idx = this.keyMap.get(lower) ?? this.keyMap.get(ch);
+    const t = this.clock.getElapsedTime();
+    if (idx !== undefined) this.pressed.set(idx, t);
+    if (ch !== lower && /[a-z]/i.test(ch)) {
+      const shift = this.keyMap.get('shift');
+      if (shift !== undefined) this.pressed.set(shift, t - 0.03);
+    }
+  }
+
+  private animateKeys(t: number) {
+    if (!this.pressed.size) return;
+    for (const [idx, start] of this.pressed) {
+      const k = t - start;
+      // Fast press, short hold, springy release.
+      const depth = k < 0.03 ? k / 0.03 : k < 0.1 ? 1 : Math.max(0, 1 - (k - 0.1) / 0.09);
+      const b = this.keyBase[idx];
+      const pos = b.pos.clone();
+      pos.y -= depth * 0.0036;
+      this.tmpM.compose(pos, b.quat, b.scale);
+      this.caps.setMatrixAt(idx, this.tmpM);
+      this.tmpC.copy(b.color).lerp(this.white, depth * 0.22);
+      this.caps.setColorAt(idx, this.tmpC);
+      if (k > 0.2) this.pressed.delete(idx);
+    }
+    this.caps.instanceMatrix.needsUpdate = true;
+    if (this.caps.instanceColor) this.caps.instanceColor.needsUpdate = true;
+  }
+
   setProgress(p: number) {
     this.progress = p;
   }
@@ -612,9 +993,16 @@ export class DeskScene {
     // Portrait screens get a wider lens so the whole desk fits under the headline.
     this.fov = this.aspect < 0.9 ? 46 : FOV;
     this.renderer.setSize(w, h, false);
+    this.composer?.setPixelRatio(this.pixelRatio);
+    this.composer?.setSize(w, h);
+    
     this.camera.aspect = this.aspect;
     this.camera.fov = this.fov;
     this.camera.updateProjectionMatrix();
+    if (this.dust) {
+      // Points are sized in world units: pixels per unit at distance 1.
+      this.dust.material.uniforms.uPixelRatio.value = (this.pixelRatio * h * 0.5) / Math.tan(THREE.MathUtils.degToRad(this.fov / 2));
+    }
   }
 
   private startPose() {
@@ -660,7 +1048,31 @@ export class DeskScene {
     this.camera.position.copy(pos);
     this.camera.lookAt(target);
     this.screenGlow.intensity = 6 + p * 4;
-    this.renderer.render(this.scene, this.camera);
+
+    const t = this.clock.getElapsedTime();
+    this.rain.material.uniforms.uTime.value = t;
+    this.dust.material.uniforms.uTime.value = t;
+    this.steam.update(t, 1 + this.bump('mug', t) * 2.2);
+    this.animateKeys(t);
+    this.grain.uniforms.uTime.value = t % 10;
+
+    // Rare, soft lightning: a double flicker, then thunder if sound is on.
+    if (!this.reduceMotion && t > this.nextFlash) this.lightning(t);
+    this.updateLamp(t);
+    this.updateObjects(t);
+    const ft = t - this.flashStart;
+    const flash = ft < 0.6 ? Math.max(0, Math.exp(-ft * 22) * 0.9, Math.exp(-Math.abs(ft - 0.18) * 30) * 0.6) : 0;
+    this.rain.material.uniforms.uFlash.value = flash;
+    this.windowLight.intensity = 1.6 + flash * 26;
+    this.hemi.intensity = 0.35 + flash * 0.6;
+
+    // Bloom eases off as the screen fills the view, so the lock screen stays crisp for the handoff.
+    this.bloom.strength = 0.34 * (1 - p * 0.9);
+    this.composer.render();
+    if (!this.firstFrameDone) {
+      this.firstFrameDone = true;
+      this.onFirstFrame();
+    }
   };
 
   start() {
@@ -678,6 +1090,7 @@ export class DeskScene {
     this.stop();
     window.clearInterval(this.clockTimer);
     this.disposables.forEach((d) => d.dispose());
+    this.composer.dispose();
     this.renderer.dispose();
   }
 }

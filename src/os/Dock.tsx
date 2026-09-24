@@ -1,9 +1,9 @@
 import { useCallback, useRef, useState } from 'react';
 import { dockIconEls, useOS, type AppId } from './store';
 import { apps, appById, initialRect } from './registry';
-import { AppIcon } from './icons';
+import { AppIcon, LaunchpadIcon } from './icons';
 
-const MAIN: AppId[] = ['about', 'academics', 'projects', 'skills', 'contact', 'browser', 'terminal', 'settings'];
+const MAIN: AppId[] = ['about', 'academics', 'projects', 'skills', 'browser', 'contact', 'terminal', 'settings'];
 
 export function launchApp(id: AppId) {
   const s = useOS.getState();
@@ -17,7 +17,7 @@ export default function Dock() {
   const size = useOS((s) => s.settings.dockSize);
   const magnify = useOS((s) => s.settings.magnify);
   const listRef = useRef<HTMLUListElement>(null);
-  const [hover, setHover] = useState<AppId | null>(null);
+  const [hover, setHover] = useState<AppId | 'launchpad' | null>(null);
 
   const applyScale = useCallback(
     (mouseX: number | null) => {
@@ -88,6 +88,25 @@ export default function Dock() {
         onMouseMove={(e) => applyScale(e.clientX)}
         onMouseLeave={() => applyScale(null)}
       >
+        {item('finder')}
+        <li data-dock-item className="dock-item" style={{ '--base': `${size}px` } as React.CSSProperties}>
+          <span className={`dock-tip ${hover === 'launchpad' ? 'is-shown' : ''}`} role="presentation">
+            Apps
+          </span>
+          <button
+            type="button"
+            className="dock-btn"
+            onClick={() => useOS.getState().setLaunchpad(!useOS.getState().launchpad)}
+            onMouseEnter={() => setHover('launchpad')}
+            onMouseLeave={() => setHover((h) => (h === 'launchpad' ? null : h))}
+            onFocus={() => setHover('launchpad')}
+            onBlur={() => setHover(null)}
+            aria-label="Apps"
+          >
+            <LaunchpadIcon />
+          </button>
+          <span className="dock-dot" aria-hidden="true" />
+        </li>
         {MAIN.map(item)}
         <li className="dock-sep" aria-hidden="true" />
         {item('trash')}

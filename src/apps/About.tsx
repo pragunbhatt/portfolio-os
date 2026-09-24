@@ -16,14 +16,11 @@ export default function About() {
 
   return (
     <div className="about" style={{ '--c': collapsed } as React.CSSProperties}>
-      <div className="about-mini" aria-hidden={collapsed < 0.9}>
-        <span className="about-mini-avatar">{profile.initials}</span>
-        <span>{profile.name}</span>
-      </div>
       <div ref={scrollRef} className="about-scroll" onScroll={onScroll}>
         <header className="about-head">
-          <div className="about-avatar" aria-hidden="true">
-            {profile.initials}
+          <div className="about-avatar-wrap" aria-hidden="true">
+            <span className="about-aura" />
+            <div className="about-avatar">{profile.initials}</div>
           </div>
           <h1 className="about-name">{profile.name}</h1>
           <p className="about-role">

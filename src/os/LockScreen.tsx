@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { profile } from '../content';
 import { prefersReducedMotion } from './motion';
 import { Glyph } from './icons';
+import { paintLockText } from '../lockPaint';
 
 const DOTS = 8;
 
@@ -18,6 +19,7 @@ export default function LockScreen({
   const [typed, setTyped] = useState(0);
   const [leaving, setLeaving] = useState(false);
   const done = useRef(false);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
     const t = window.setInterval(() => {
@@ -53,6 +55,24 @@ export default function LockScreen({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [armed]);
 
+  useEffect(() => {
+    const c = canvasRef.current;
+    if (!c) return;
+    const paint = () => {
+      const r = c.getBoundingClientRect();
+      const dpr = Math.min(window.devicePixelRatio, 2);
+      c.width = Math.round(r.width * dpr);
+      c.height = Math.round(r.height * dpr);
+      const g = c.getContext('2d')!;
+      g.clearRect(0, 0, c.width, c.height);
+      paintLockText(g, c.width, c.height, now);
+    };
+    paint();
+    document.fonts?.ready.then(paint);
+    window.addEventListener('resize', paint);
+    return () => window.removeEventListener('resize', paint);
+  }, [now]);
+
   const date = now.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
   const time = now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
 
@@ -60,8 +80,10 @@ export default function LockScreen({
     <div className={`lock ${leaving ? 'is-leaving' : ''}`} onClick={interactive ? unlock : undefined}>
       <div className="lock-screen">
       <div className="lock-top">
-        <p className="lock-date">{date}</p>
-        <p className="lock-time">{time}</p>
+        <canvas ref={canvasRef} className="lock-canvas" aria-hidden="true" />
+        <p className="sr-only">
+          {date}, {time}
+        </p>
       </div>
       <div className="lock-user">
         <div className="lock-avatar" aria-hidden="true">

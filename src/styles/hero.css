@@ -32,41 +32,217 @@
   position: absolute;
   left: clamp(24px, 6vw, 104px);
   top: 50%;
-  translate: 0 -68%;
+  translate: 0 -74%;
   max-width: min(46vw, 640px);
   will-change: opacity, transform;
 }
 
 .hero-name {
-  font-family: var(--font-display);
-  font-variation-settings: 'opsz' 96;
-  font-weight: 780;
-  font-size: clamp(64px, 9.6vw, 176px);
-  line-height: 0.84;
-  letter-spacing: -0.048em;
+  font-family: 'Geist Mono', 'JetBrains Mono', ui-monospace, monospace;
+  font-weight: 500;
+  font-size: clamp(56px, 8.2vw, 150px);
+  line-height: 0.95;
+  letter-spacing: -0.065em;
   display: flex;
   flex-direction: column;
-  /* Warm lamp light from above, fading to paper white. */
-  background: linear-gradient(172deg, #ffd8a6 0%, #f6e4cc 38%, var(--paper) 70%);
+  color: var(--paper);
+  filter: drop-shadow(0 12px 44px rgba(0, 0, 0, 0.45));
+}
+
+.hero-name .ty-live {
+  background: linear-gradient(176deg, #ffe2bd 0%, #f6e9d8 45%, var(--paper) 90%);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
-  filter: drop-shadow(0 10px 40px rgba(0, 0, 0, 0.35));
 }
 
-.hero-name span:last-child {
-  padding-left: 0.42em;
+.hero-name > .ty:last-child {
+  margin-left: 1.2ch;
 }
 
 .hero-sub {
-  margin-top: 28px;
-  font-family: var(--font-display);
-  font-variation-settings: 'opsz' 18;
-  font-size: clamp(16px, 1.25vw, 19px);
-  line-height: 1.5;
+  margin-top: 30px;
+  font-family: 'Geist Mono', 'JetBrains Mono', ui-monospace, monospace;
+  font-size: clamp(13px, 0.98vw, 15px);
+  line-height: 1.7;
   font-weight: 400;
-  max-width: 34ch;
-  color: rgba(243, 239, 231, 0.74);
+  letter-spacing: -0.01em;
+  max-width: 44ch;
+  color: rgba(243, 239, 231, 0.68);
+}
+
+.ty {
+  position: relative;
+  display: inline-block;
+}
+
+.hero-sub .ty {
+  display: block;
+}
+
+.ty-ghost {
+  visibility: hidden;
+}
+
+.ty-live {
+  position: absolute;
+  inset: 0;
+  white-space: pre-wrap;
+}
+
+/* A terminal block caret: solid while typing, blinking while idle. */
+.ty-caret {
+  display: inline-block;
+  width: 0.56em;
+  height: 0.9em;
+  margin-left: 0.06em;
+  vertical-align: -0.1em;
+  border-radius: 2px;
+  background: #ffcf95;
+  box-shadow: 0 0 18px rgba(255, 190, 110, 0.55);
+  animation: caret 1.05s steps(1) infinite;
+}
+
+.ty-caret.is-typing {
+  animation: none;
+}
+
+.hero-sub .ty-caret {
+  width: 0.62em;
+  height: 1.15em;
+  vertical-align: -0.22em;
+  background: rgba(243, 239, 231, 0.75);
+  box-shadow: none;
+}
+
+@keyframes caret {
+  50% {
+    opacity: 0;
+  }
+}
+
+.desk-tip {
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: 20;
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-size: 12.5px;
+  font-weight: 500;
+  white-space: nowrap;
+  color: rgba(255, 255, 255, 0.95);
+  background: rgba(30, 32, 40, 0.42);
+  backdrop-filter: blur(16px) saturate(1.6);
+  -webkit-backdrop-filter: blur(16px) saturate(1.6);
+  box-shadow:
+    inset 0 0 0 0.5px rgba(255, 255, 255, 0.22),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2),
+    0 8px 24px rgba(0, 0, 0, 0.35);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.desk-tip.is-shown {
+  opacity: 1;
+}
+
+/* Keyboard alternatives for clicking desk objects: hidden until focused. */
+.desk-controls {
+  position: absolute;
+  left: 50%;
+  bottom: 120px;
+  translate: -50% 0;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  max-width: 90vw;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+}
+
+.desk-controls:focus-within {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.desk-controls button {
+  padding: 7px 14px;
+  border-radius: 999px;
+  font-size: 12.5px;
+  color: #fff;
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  box-shadow: inset 0 0 0 0.5px rgba(255, 255, 255, 0.25);
+}
+
+.hero-sound {
+  position: absolute;
+  top: clamp(16px, 3vh, 28px);
+  right: clamp(16px, 3vw, 32px);
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  height: 36px;
+  padding: 0 16px 0 14px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 500;
+  color: rgba(243, 239, 231, 0.9);
+  background: rgba(255, 255, 255, 0.06);
+  backdrop-filter: blur(14px) saturate(1.6);
+  -webkit-backdrop-filter: blur(14px) saturate(1.6);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.22),
+    inset 0 0 0 0.5px rgba(255, 255, 255, 0.18),
+    0 8px 24px rgba(0, 0, 0, 0.3);
+  transition: background 0.3s ease;
+}
+
+.hero-sound:hover {
+  background: rgba(255, 255, 255, 0.11);
+}
+
+.hero-sound-bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 12px;
+}
+
+.hero-sound-bars i {
+  width: 2px;
+  height: 4px;
+  border-radius: 1px;
+  background: currentColor;
+  opacity: 0.8;
+}
+
+.hero-sound.is-on .hero-sound-bars i {
+  animation: eq 1s ease-in-out infinite;
+}
+.hero-sound.is-on .hero-sound-bars i:nth-child(2) {
+  animation-delay: -0.3s;
+}
+.hero-sound.is-on .hero-sound-bars i:nth-child(3) {
+  animation-delay: -0.6s;
+}
+.hero-sound.is-on .hero-sound-bars i:nth-child(4) {
+  animation-delay: -0.15s;
+}
+
+@keyframes eq {
+  0%,
+  100% {
+    height: 3px;
+  }
+  50% {
+    height: 12px;
+  }
 }
 
 .hero-cue {

@@ -1,11 +1,13 @@
 import { useRef, useState } from 'react';
 import { Toolbar } from '../os/WindowChrome';
-import { useOS, type Appearance } from '../os/store';
+import { useOS, type Appearance, type GlassStyle } from '../os/store';
+import { rainVolume, setRain, setRainVolume } from '../os/rainSound';
+import { useRainOn } from '../os/useRain';
 import { wallpaperCss, wallpapers } from '../wallpapers';
 import { useWallpaperStyle } from '../os/Desktop';
 import { profile } from '../content';
 
-type Pane = 'wallpaper' | 'appearance' | 'dock' | 'about';
+type Pane = 'wallpaper' | 'appearance' | 'dock' | 'sound' | 'about';
 
 const PANES: { id: Pane; label: string; color: string; glyph: React.ReactNode }[] = [
   {
@@ -38,6 +40,17 @@ const PANES: { id: Pane; label: string; color: string; glyph: React.ReactNode }[
       <svg viewBox="0 0 16 16" aria-hidden="true">
         <rect x="2" y="3" width="12" height="10" rx="1.6" fill="none" stroke="#fff" strokeWidth="1.4" />
         <rect x="4.5" y="10" width="7" height="1.6" rx="0.8" fill="#fff" />
+      </svg>
+    ),
+  },
+  {
+    id: 'sound',
+    label: 'Sound',
+    color: '#ff375f',
+    glyph: (
+      <svg viewBox="0 0 16 16" aria-hidden="true">
+        <path d="M2.5 6h2.2L8 3.2v9.6L4.7 10H2.5z" fill="#fff" />
+        <path d="M10.3 5.6a3.4 3.4 0 0 1 0 4.8M12 4a5.6 5.6 0 0 1 0 8" fill="none" stroke="#fff" strokeWidth="1.3" strokeLinecap="round" />
       </svg>
     ),
   },
@@ -158,8 +171,30 @@ function WallpaperPane() {
   );
 }
 
+function Switch({ on, onChange, labelId }: { on: boolean; onChange: (v: boolean) => void; labelId: string }) {
+  return (
+    <button type="button" role="switch" aria-checked={on} aria-labelledby={labelId} className={`switch ${on ? 'is-on' : ''}`} onClick={() => onChange(!on)}>
+      <span />
+    </button>
+  );
+}
+
+function Segmented<T extends string>({ value, options, onChange, label }: { value: T; options: { id: T; label: string }[]; onChange: (v: T) => void; label: string }) {
+  const i = Math.max(0, options.findIndex((o) => o.id === value));
+  return (
+    <div className="seg" role="radiogroup" aria-label={label} style={{ '--n': options.length, '--i': i } as React.CSSProperties}>
+      <span className="seg-thumb" aria-hidden="true" />
+      {options.map((o) => (
+        <button key={o.id} type="button" role="radio" aria-checked={o.id === value} className={o.id === value ? 'is-on' : ''} onClick={() => onChange(o.id)}>
+          {o.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 function AppearancePane() {
-  const { appearance, accent } = useOS((s) => s.settings);
+  const { appearance, accent, glass } = useOS((s) => s.settings);
   const update = useOS((s) => s.updateSettings);
   const modes: { id: Appearance; label: string }[] = [
     { id: 'auto', label: 'Auto' },
@@ -188,6 +223,23 @@ function AppearancePane() {
           ))}
         </div>
       </div>
+      <div className="set-card set-list">
+        <div className="set-row">
+          <span className="set-row-label">
+            Liquid Glass
+            <span className="set-row-sub">Clear lets more of the wallpaper through. Tinted is more frosted.</span>
+          </span>
+          <Segmented<GlassStyle>
+            label="Liquid Glass"
+            value={glass}
+            onChange={(v) => update({ glass: v })}
+            options={[
+              { id: 'clear', label: 'Clear' },
+              { id: 'tinted', label: 'Tinted' },
+            ]}
+          />
+        </div>
+      </div>
       <div className="set-card">
         <div className="set-row">
           <p className="set-row-label">Accent color</p>
@@ -213,7 +265,7 @@ function AppearancePane() {
 }
 
 function DockPane() {
-  const { dockSize, magnify, minimizeEffect } = useOS((s) => s.settings);
+  const { dockSize, magnify, minimizeEffect, widgets } = useOS((s) => s.settings);
   const update = useOS((s) => s.updateSettings);
   return (
     <div className="set-pane">
@@ -241,12 +293,54 @@ function DockPane() {
             <span />
           </button>
         </div>
+        <div className="set-row">
+          <span className="set-row-label" id="widgets-label">
+            Show widgets on the desktop
+          </span>
+          <Switch on={widgets} onChange={(v) => update({ widgets: v })} labelId="widgets-label" />
+        </div>
         <label className="set-row">
           <span className="set-row-label">Minimize windows using</span>
           <select value={minimizeEffect} onChange={(e) => update({ minimizeEffect: e.target.value as 'genie' | 'scale' })}>
             <option value="genie">Genie effect</option>
             <option value="scale">Scale effect</option>
           </select>
+        </label>
+      </div>
+    </div>
+  );
+}
+
+function SoundPane() {
+  const on = useRainOn();
+  const [vol, setVol] = useState(rainVolume);
+  return (
+    <div className="set-pane">
+      <div className="set-card set-list">
+        <div className="set-row">
+          <span className="set-row-label" id="rain-label">
+            Rain ambience
+            <span className="set-row-sub">The same rain that's falling past the window on the desk, with the odd roll of thunder.</span>
+          </span>
+          <Switch on={on} onChange={setRain} labelId="rain-label" />
+        </div>
+        <label className="set-row">
+          <span className="set-row-label">Volume</span>
+          <span className="set-slider">
+            <span className="muted">Quiet</span>
+            <input
+              type="range"
+              min={0}
+              max={100}
+              value={Math.round(vol * 100)}
+              onChange={(e) => {
+                const v = Number(e.target.value) / 100;
+                setVol(v);
+                setRainVolume(v);
+              }}
+            />
+            <span className="muted">Loud</span>
+          </span>
         </label>
       </div>
     </div>
@@ -312,6 +406,7 @@ export default function Settings() {
           {pane === 'wallpaper' && <WallpaperPane />}
           {pane === 'appearance' && <AppearancePane />}
           {pane === 'dock' && <DockPane />}
+          {pane === 'sound' && <SoundPane />}
           {pane === 'about' && <AboutPane />}
         </div>
       </div>

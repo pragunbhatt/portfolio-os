@@ -18,122 +18,261 @@ function squirclePath(size = 100, inset = 9, n = 5): string {
 
 export const SQUIRCLE = squirclePath();
 
-function Base({ id, from, to, children }: { id: string; from: string; to: string; children: React.ReactNode }) {
+type BaseProps = { id: string; bg: [string, string]; children: React.ReactNode; bgAngle?: 'v' | 'd' };
+
+// Tahoe icon anatomy: a lit squircle, a glyph that casts a soft shadow, a specular band and a glass rim.
+function Base({ id, bg, children, bgAngle = 'v' }: BaseProps) {
   return (
     <svg viewBox="0 0 100 100" className="app-icon-svg" aria-hidden="true">
       <defs>
-        <linearGradient id={`g-${id}`} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" stopColor={from} />
-          <stop offset="1" stopColor={to} />
+        <linearGradient id={`g-${id}`} x1="0" y1="0" x2={bgAngle === 'd' ? '1' : '0'} y2="1">
+          <stop offset="0" stopColor={bg[0]} />
+          <stop offset="1" stopColor={bg[1]} />
         </linearGradient>
         <linearGradient id={`sheen-${id}`} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" stopColor="#fff" stopOpacity="0.35" />
-          <stop offset="0.5" stopColor="#fff" stopOpacity="0" />
+          <stop offset="0" stopColor="#fff" stopOpacity="0.5" />
+          <stop offset="0.5" stopColor="#fff" stopOpacity="0.06" />
+          <stop offset="1" stopColor="#fff" stopOpacity="0" />
         </linearGradient>
+        <linearGradient id={`rim-${id}`} x1="0.15" y1="0" x2="0.85" y2="1">
+          <stop offset="0" stopColor="#fff" stopOpacity="0.95" />
+          <stop offset="0.3" stopColor="#fff" stopOpacity="0.15" />
+          <stop offset="0.72" stopColor="#fff" stopOpacity="0.05" />
+          <stop offset="1" stopColor="#fff" stopOpacity="0.6" />
+        </linearGradient>
+        <radialGradient id={`shade-${id}`} cx="0.5" cy="1.1" r="0.8">
+          <stop offset="0" stopColor="#000" stopOpacity="0.2" />
+          <stop offset="1" stopColor="#000" stopOpacity="0" />
+        </radialGradient>
         <clipPath id={`clip-${id}`}>
           <path d={SQUIRCLE} />
         </clipPath>
       </defs>
       <path d={SQUIRCLE} fill={`url(#g-${id})`} />
-      <g clipPath={`url(#clip-${id})`}>{children}</g>
-      <path d={SQUIRCLE} fill={`url(#sheen-${id})`} opacity="0.6" />
-      <path d={SQUIRCLE} fill="none" stroke="rgba(255,255,255,0.28)" strokeWidth="0.8" />
+      <g clipPath={`url(#clip-${id})`}>
+        <path d={SQUIRCLE} fill={`url(#shade-${id})`} />
+        <g filter="drop-shadow(0 2px 2.4px rgba(0,0,0,0.2))">{children}</g>
+        <path d="M0 0h100v40C76 49 24 49 0 40z" fill={`url(#sheen-${id})`} opacity="0.7" />
+      </g>
+      <path d={SQUIRCLE} fill="none" stroke={`url(#rim-${id})`} strokeWidth="1.2" />
+      <path d={SQUIRCLE} fill="none" stroke="rgba(0,0,0,0.12)" strokeWidth="0.5" />
     </svg>
   );
 }
 
+function Grad({ id, stops, x2 = 0, y2 = 1 }: { id: string; stops: [number, string, number?][]; x2?: number; y2?: number }) {
+  return (
+    <linearGradient id={id} x1="0" y1="0" x2={x2} y2={y2}>
+      {stops.map(([o, c, a], i) => (
+        <stop key={i} offset={o} stopColor={c} stopOpacity={a ?? 1} />
+      ))}
+    </linearGradient>
+  );
+}
+
+export function FolderIcon({ tint = '#4aa8ff', glyph }: { tint?: string; glyph?: React.ReactNode }) {
+  const id = `fold-${tint.replace('#', '')}`;
+  return (
+    <svg viewBox="0 0 100 80" className="app-icon-svg" aria-hidden="true">
+      <defs>
+        <linearGradient id={`${id}-back`} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor={tint} stopOpacity="0.85" />
+          <stop offset="1" stopColor={tint} />
+        </linearGradient>
+        <linearGradient id={`${id}-front`} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#fff" stopOpacity="0.55" />
+          <stop offset="0.12" stopColor={tint} stopOpacity="0.95" />
+          <stop offset="1" stopColor={tint} />
+        </linearGradient>
+      </defs>
+      <path d="M8 14c0-4 3-7 7-7h20c2.4 0 4 1 5.4 2.6L45 14h40c4 0 7 3 7 7v44c0 4-3 7-7 7H15c-4 0-7-3-7-7z" fill={`url(#${id}-back)`} />
+      <path d="M8 14c0-4 3-7 7-7h20c2.4 0 4 1 5.4 2.6L45 14h40c4 0 7 3 7 7v44c0 4-3 7-7 7H15c-4 0-7-3-7-7z" fill="#000" opacity="0.12" />
+      <rect x="11" y="18" width="78" height="10" rx="3" fill="#fff" opacity="0.92" />
+      <path d="M6 28c0-3 2.4-5 5-5h78c2.8 0 5 2.2 5 5v37c0 4-3 7-7 7H13c-4 0-7-3-7-7z" fill={`url(#${id}-front)`} />
+      <path d="M6 28c0-3 2.4-5 5-5h78c2.8 0 5 2.2 5 5" fill="none" stroke="#fff" strokeOpacity="0.7" strokeWidth="0.8" />
+      {glyph && (
+        <g opacity="0.55" fill="none" stroke="#0b3f86" strokeWidth="3.4" strokeLinecap="round" strokeLinejoin="round">
+          {glyph}
+        </g>
+      )}
+    </svg>
+  );
+}
+
+export function DocIcon({ ext, tint = '#8e8e93' }: { ext: string; tint?: string }) {
+  return (
+    <svg viewBox="0 0 80 100" className="app-icon-svg" aria-hidden="true">
+      <path d="M12 4h40l20 20v68c0 2.2-1.8 4-4 4H12c-2.2 0-4-1.8-4-4V8c0-2.2 1.8-4 4-4z" fill="#fff" />
+      <path d="M12 4h40l20 20v68c0 2.2-1.8 4-4 4H12c-2.2 0-4-1.8-4-4V8c0-2.2 1.8-4 4-4z" fill="none" stroke="rgba(0,0,0,0.14)" strokeWidth="1" />
+      <path d="M52 4v16c0 2.2 1.8 4 4 4h16" fill="#eceef2" stroke="rgba(0,0,0,0.14)" strokeWidth="1" />
+      {[36, 44, 52, 60].map((y) => (
+        <rect key={y} x="18" y={y} width={y === 60 ? 26 : 44} height="3" rx="1.5" fill="#c7cad1" />
+      ))}
+      <rect x="14" y="72" width="52" height="16" rx="4" fill={tint} />
+      <text x="40" y="84" textAnchor="middle" fontSize="10" fontWeight="700" fill="#fff" fontFamily="-apple-system, Inter, system-ui, sans-serif">
+        {ext}
+      </text>
+    </svg>
+  );
+}
+
+export function LaunchpadIcon() {
+  const colors = ['#ff5f57', '#febc2e', '#28c840', '#0a84ff', '#bf5af2', '#ff9f0a', '#64d2ff', '#ff375f', '#30d158'];
+  return (
+    <Base id="launchpad" bg={['#fbfbfd', '#dfe1e7']}>
+      <rect x="22" y="18" width="56" height="10" rx="5" fill="#d7dae1" />
+      <circle cx="29" cy="23" r="2.4" fill="none" stroke="#8e8e93" strokeWidth="1.2" />
+      {colors.map((c, i) => (
+        <rect key={i} x={24 + (i % 3) * 18} y={36 + Math.floor(i / 3) * 16} width="13" height="11" rx="3.4" fill={c} />
+      ))}
+    </Base>
+  );
+}
+
 const icons: Record<AppId, () => React.ReactElement> = {
+  finder: () => (
+    <Base id="finder" bg={['#7cc8ff', '#1478f0']}>
+      <defs>
+        <Grad id="finder-win" stops={[[0, '#ffffff'], [1, '#e3f0ff']]} />
+      </defs>
+      <rect x="19" y="24" width="62" height="50" rx="7" fill="url(#finder-win)" />
+      <rect x="19" y="24" width="20" height="50" rx="7" fill="#cfe4ff" />
+      <rect x="32" y="24" width="7" height="50" fill="#cfe4ff" />
+      <circle cx="25" cy="30" r="1.8" fill="#ff5f57" />
+      <circle cx="30.5" cy="30" r="1.8" fill="#febc2e" />
+      <circle cx="36" cy="30" r="1.8" fill="#28c840" />
+      {[40, 47, 54].map((y) => (
+        <rect key={y} x="23" y={y} width="11" height="3" rx="1.5" fill="#7fb4f5" />
+      ))}
+      <path d="M46 42c0-2 1.6-3.4 3.4-3.4h7.6l2.4 2.6h12c1.9 0 3.4 1.5 3.4 3.4v14c0 1.9-1.5 3.4-3.4 3.4H49.4C47.6 62 46 60.5 46 58.6z" fill="#3b99ff" />
+      <path d="M45 46.5c0-1.4 1.1-2.5 2.5-2.5h26c1.4 0 2.5 1.1 2.5 2.5V59c0 1.7-1.3 3-3 3H48c-1.7 0-3-1.3-3-3z" fill="#5aafff" />
+    </Base>
+  ),
   about: () => (
-    <Base id="about" from="#f7c46c" to="#d9763d">
-      <rect x="24" y="22" width="52" height="58" rx="7" fill="#fffaf2" />
-      <rect x="24" y="22" width="52" height="16" rx="7" fill="#f3e3cc" />
-      <circle cx="50" cy="47" r="10" fill="#c8733f" />
-      <path d="M32 74c2-10 10-15 18-15s16 5 18 15z" fill="#c8733f" />
-      <rect x="19" y="30" width="6" height="8" rx="2" fill="#8a4a24" />
-      <rect x="19" y="46" width="6" height="8" rx="2" fill="#8a4a24" />
-      <rect x="19" y="62" width="6" height="8" rx="2" fill="#8a4a24" />
+    <Base id="about" bg={['#e9d8c4', '#b7936c']}>
+      <defs>
+        <Grad id="about-card" stops={[[0, '#ffffff'], [1, '#f1ebe3']]} />
+        <Grad id="about-person" stops={[[0, '#b7a896'], [1, '#8b7a66']]} />
+      </defs>
+      <rect x="22" y="18" width="52" height="64" rx="8" fill="url(#about-card)" />
+      <rect x="72" y="26" width="7" height="11" rx="2.5" fill="#ff9f0a" />
+      <rect x="72" y="40" width="7" height="11" rx="2.5" fill="#30d158" />
+      <rect x="72" y="54" width="7" height="11" rx="2.5" fill="#0a84ff" />
+      <circle cx="48" cy="42" r="11" fill="url(#about-person)" />
+      <path d="M29 73c2.5-11 10.5-17 19-17s16.5 6 19 17z" fill="url(#about-person)" />
     </Base>
   ),
   academics: () => (
-    <Base id="academics" from="#4c5bd9" to="#1c2470">
-      <path d="M50 26 86 42 50 58 14 42z" fill="#ffd36b" />
-      <path d="M50 58 30 49v14c0 6 9 11 20 11s20-5 20-11V49z" fill="#f2b940" />
-      <path d="M78 45v20" stroke="#ffd36b" strokeWidth="3" strokeLinecap="round" />
-      <circle cx="78" cy="68" r="4" fill="#ffd36b" />
-      <path d="M50 26 86 42 50 58 14 42z" fill="#fff" opacity="0.18" />
+    <Base id="academics" bg={['#5263e8', '#1b2272']}>
+      <defs>
+        <Grad id="ac-cap" stops={[[0, '#ffe39a'], [1, '#f2b53a']]} />
+        <Grad id="ac-base" stops={[[0, '#f0b43d'], [1, '#c98a1c']]} />
+      </defs>
+      <path d="M50 58 29 49v15c0 6.5 9.4 11.5 21 11.5S71 70.5 71 64V49z" fill="url(#ac-base)" />
+      <path d="M50 24 88 41 50 58 12 41z" fill="url(#ac-cap)" />
+      <path d="M50 24 88 41 50 58 12 41z" fill="none" stroke="#fff" strokeOpacity="0.55" strokeWidth="0.8" />
+      <path d="M79 45v19" stroke="#ffe39a" strokeWidth="2.6" strokeLinecap="round" />
+      <path d="M75.5 64h7l-1.5 9h-4z" fill="#ffd36b" />
     </Base>
   ),
   projects: () => (
-    <Base id="projects" from="#7fd0ff" to="#1f7fe6">
-      <path d="M18 34c0-4 3-7 7-7h16l6 6h28c4 0 7 3 7 7v32c0 4-3 7-7 7H25c-4 0-7-3-7-7z" fill="#e6f5ff" />
-      <path d="M18 42h64v30c0 4-3 7-7 7H25c-4 0-7-3-7-7z" fill="#fff" />
-      <path d="M42 51 34 59l8 8M58 51l8 8-8 8" stroke="#1f7fe6" strokeWidth="4.5" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+    <Base id="projects" bg={['#2f3542', '#10131a']}>
+      <defs>
+        <Grad id="pj-hammer" stops={[[0, '#9fd3ff'], [1, '#2b82f6']]} />
+      </defs>
+      <rect x="18" y="20" width="64" height="48" rx="7" fill="#1c212c" stroke="#3a4252" strokeWidth="1" />
+      <rect x="18" y="20" width="64" height="9" rx="4" fill="#262c38" />
+      <circle cx="24" cy="24.5" r="1.7" fill="#ff5f57" />
+      <circle cx="29.5" cy="24.5" r="1.7" fill="#febc2e" />
+      <circle cx="35" cy="24.5" r="1.7" fill="#28c840" />
+      <path d="M33 40 25 47l8 7" stroke="#ff7ab6" strokeWidth="3.4" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M44 40h18M44 47h26M44 54h12" stroke="#7ab8ff" strokeWidth="3" strokeLinecap="round" />
+      <rect x="30" y="72" width="40" height="9" rx="4.5" fill="url(#pj-hammer)" />
     </Base>
   ),
   skills: () => (
-    <Base id="skills" from="#3c4250" to="#15181f">
-      <path d="M50 62 20 50l30-12 30 12z" fill="#ffb454" />
-      <path d="M50 52 20 40l30-12 30 12z" fill="#4fd1a5" />
-      <path d="M50 42 20 30l30-12 30 12z" fill="#6aa8ff" />
-      <path d="M20 58l30 12 30-12" stroke="#fff" strokeOpacity="0.5" strokeWidth="3" fill="none" strokeLinejoin="round" />
-      <path d="M20 66l30 12 30-12" stroke="#fff" strokeOpacity="0.3" strokeWidth="3" fill="none" strokeLinejoin="round" />
+    <Base id="skills" bg={['#3a404e', '#15181f']}>
+      <defs>
+        <Grad id="sk-1" stops={[[0, '#9cc8ff'], [1, '#3d8bff']]} />
+        <Grad id="sk-2" stops={[[0, '#8df0cc'], [1, '#22b787']]} />
+        <Grad id="sk-3" stops={[[0, '#ffd08a'], [1, '#ff9a2e']]} />
+      </defs>
+      <path d="M50 70 18 57l32-13 32 13z" fill="url(#sk-3)" />
+      <path d="M50 58 18 45l32-13 32 13z" fill="url(#sk-2)" />
+      <path d="M50 46 18 33l32-13 32 13z" fill="url(#sk-1)" />
+      <path d="M18 33l32 13 32-13" fill="none" stroke="#fff" strokeOpacity="0.55" strokeWidth="0.8" />
     </Base>
   ),
   contact: () => (
-    <Base id="contact" from="#6fd3ff" to="#1b7cf2">
-      <rect x="18" y="29" width="64" height="44" rx="6" fill="#fff" />
-      <path d="M20 33l30 22 30-22" stroke="#1b7cf2" strokeWidth="3.5" fill="none" strokeLinejoin="round" />
-      <path d="M20 71l22-18M80 71 58 53" stroke="#b9d9ff" strokeWidth="2.5" />
+    <Base id="contact" bg={['#5ec6ff', '#1567f0']}>
+      <defs>
+        <Grad id="mail-env" stops={[[0, '#ffffff'], [1, '#e6eefb']]} />
+        <Grad id="mail-flap" stops={[[0, '#f4f7fd'], [1, '#d4e0f5']]} />
+      </defs>
+      <rect x="16" y="28" width="68" height="46" rx="6" fill="url(#mail-env)" />
+      <path d="M16 70 44 49c3.5-2.6 8.5-2.6 12 0l28 21" fill="none" stroke="#c9d6ee" strokeWidth="1.6" />
+      <path d="M17 31l28.5 22c2.7 2 6.3 2 9 0L83 31c-.9-1.8-2.8-3-5-3H22c-2.2 0-4.1 1.2-5 3z" fill="url(#mail-flap)" />
     </Base>
   ),
   browser: () => (
-    <Base id="browser" from="#fdfdfd" to="#dcdfe6">
-      <circle cx="50" cy="50" r="33" fill="#1e7df0" />
-      <circle cx="50" cy="50" r="33" fill="url(#g-browser-inner)" />
+    <Base id="browser" bg={['#ffffff', '#e2e5ec']}>
       <defs>
-        <radialGradient id="g-browser-inner" cx="0.4" cy="0.3" r="0.8">
-          <stop offset="0" stopColor="#8fd1ff" />
-          <stop offset="1" stopColor="#1463d8" />
+        <radialGradient id="br-disc" cx="0.42" cy="0.32" r="0.78">
+          <stop offset="0" stopColor="#7fd0ff" />
+          <stop offset="0.6" stopColor="#1f8cf5" />
+          <stop offset="1" stopColor="#0b5ad6" />
         </radialGradient>
       </defs>
-      {Array.from({ length: 24 }).map((_, i) => {
-        const a = (i / 24) * Math.PI * 2;
-        const r1 = i % 2 ? 29 : 27;
+      <circle cx="50" cy="50" r="33" fill="url(#br-disc)" />
+      {Array.from({ length: 36 }).map((_, i) => {
+        const a = (i / 36) * Math.PI * 2;
+        const long = i % 3 === 0;
         return (
           <line
             key={i}
-            x1={50 + Math.cos(a) * r1}
-            y1={50 + Math.sin(a) * r1}
-            x2={50 + Math.cos(a) * 31}
-            y2={50 + Math.sin(a) * 31}
+            x1={50 + Math.cos(a) * (long ? 25.5 : 27.5)}
+            y1={50 + Math.sin(a) * (long ? 25.5 : 27.5)}
+            x2={50 + Math.cos(a) * 30.5}
+            y2={50 + Math.sin(a) * 30.5}
             stroke="#fff"
-            strokeOpacity="0.8"
-            strokeWidth="1"
+            strokeOpacity={long ? 0.95 : 0.6}
+            strokeWidth={long ? 1.3 : 0.8}
           />
         );
       })}
-      <path d="M50 50 70 30 55 55z" fill="#ff4b4b" />
-      <path d="M50 50 30 70 45 45z" fill="#fff" />
-      <circle cx="50" cy="50" r="2.4" fill="#fff" />
+      <path d="M50 50 71 29 54.5 54.5z" fill="#ff453a" />
+      <path d="M50 50 29 71 45.5 45.5z" fill="#f2f4f8" />
+      <circle cx="50" cy="50" r="2.2" fill="#fff" />
     </Base>
   ),
   terminal: () => (
-    <Base id="terminal" from="#d7d9de" to="#9ea2ab">
-      <rect x="17" y="22" width="66" height="56" rx="6" fill="#16181d" />
-      <path d="M27 38l9 7-9 7" stroke="#e8e8e8" strokeWidth="4" fill="none" strokeLinecap="round" strokeLinejoin="round" />
-      <path d="M41 55h14" stroke="#e8e8e8" strokeWidth="4" strokeLinecap="round" />
+    <Base id="terminal" bg={['#e4e6ea', '#a4a8b1']}>
+      <rect x="16" y="21" width="68" height="58" rx="8" fill="#101216" />
+      <rect x="16" y="21" width="68" height="58" rx="8" fill="none" stroke="#fff" strokeOpacity="0.18" strokeWidth="0.8" />
+      <path d="M27 38l10 8-10 8" stroke="#f2f2f2" strokeWidth="4.2" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M42 57h15" stroke="#f2f2f2" strokeWidth="4.2" strokeLinecap="round" />
     </Base>
   ),
   settings: () => (
-    <Base id="settings" from="#b7bcc5" to="#6c717b">
+    <Base id="settings" bg={['#e9eaee', '#aeb2bb']}>
+      <defs>
+        <radialGradient id="set-gear" cx="0.5" cy="0.35" r="0.7">
+          <stop offset="0" stopColor="#8a8f99" />
+          <stop offset="1" stopColor="#4a4f58" />
+        </radialGradient>
+      </defs>
       <g transform="translate(50 50)">
-        {Array.from({ length: 12 }).map((_, i) => (
-          <rect key={i} x="-4" y="-33" width="8" height="12" rx="2" fill="#3f434b" transform={`rotate(${i * 30})`} />
+        {Array.from({ length: 24 }).map((_, i) => (
+          <rect key={i} x="-2.4" y="-34" width="4.8" height="8" rx="1.4" fill="url(#set-gear)" transform={`rotate(${i * 15})`} />
         ))}
-        <circle r="24" fill="#3f434b" />
-        <circle r="20" fill="#c9cdd4" />
-        <circle r="9" fill="#3f434b" />
-        <circle r="5" fill="#9aa0a9" />
+        <circle r="27" fill="url(#set-gear)" />
+        <circle r="22" fill="#d7d9de" />
+        <circle r="22" fill="none" stroke="#fff" strokeOpacity="0.6" strokeWidth="0.8" />
+        {[0, 120, 240].map((r) => (
+          <rect key={r} x="-2.8" y="-20" width="5.6" height="20" rx="2.8" fill="#6c717b" transform={`rotate(${r})`} />
+        ))}
+        <circle r="7" fill="#5a5f69" />
+        <circle r="3.4" fill="#c7cad1" />
       </g>
     </Base>
   ),
@@ -141,16 +280,30 @@ const icons: Record<AppId, () => React.ReactElement> = {
     <svg viewBox="0 0 100 100" className="app-icon-svg" aria-hidden="true">
       <defs>
         <linearGradient id="g-trash" x1="0" y1="0" x2="1" y2="0">
-          <stop offset="0" stopColor="#dfe4ea" stopOpacity="0.75" />
-          <stop offset="0.5" stopColor="#ffffff" stopOpacity="0.9" />
-          <stop offset="1" stopColor="#c7ced8" stopOpacity="0.75" />
+          <stop offset="0" stopColor="#d6dbe2" stopOpacity="0.7" />
+          <stop offset="0.45" stopColor="#ffffff" stopOpacity="0.95" />
+          <stop offset="1" stopColor="#bcc3cd" stopOpacity="0.7" />
         </linearGradient>
+        <linearGradient id="g-trash-rim" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#ffffff" />
+          <stop offset="1" stopColor="#d0d5dc" />
+        </linearGradient>
+        <clipPath id="trash-body">
+          <path d="M22 24h56l-5.5 62c-.4 3.4-3.2 6-6.6 6H34.1c-3.4 0-6.2-2.6-6.6-6z" />
+        </clipPath>
       </defs>
-      <path d="M24 26h52l-5 60c-.4 3-3 5-6 5H35c-3 0-5.6-2-6-5z" fill="url(#g-trash)" stroke="#9aa3ae" strokeWidth="1.2" />
-      <ellipse cx="50" cy="26" rx="27" ry="5" fill="#eef1f5" stroke="#9aa3ae" strokeWidth="1.2" />
-      {[34, 42, 50, 58, 66].map((x) => (
-        <path key={x} d={`M${x} 34l${(x - 50) * 0.08} 50`} stroke="#9aa3ae" strokeOpacity="0.7" strokeWidth="1.4" />
-      ))}
+      <path d="M22 24h56l-5.5 62c-.4 3.4-3.2 6-6.6 6H34.1c-3.4 0-6.2-2.6-6.6-6z" fill="url(#g-trash)" />
+      <g clipPath="url(#trash-body)" stroke="#9aa3ae" strokeOpacity="0.55" strokeWidth="0.8">
+        {Array.from({ length: 12 }).map((_, i) => (
+          <line key={`v${i}`} x1={24 + i * 5} y1="26" x2={27 + i * 4.4} y2="92" />
+        ))}
+        {Array.from({ length: 12 }).map((_, i) => (
+          <line key={`h${i}`} x1="20" y1={30 + i * 5.5} x2="80" y2={30 + i * 5.5} strokeOpacity="0.25" />
+        ))}
+      </g>
+      <path d="M22 24h56l-5.5 62c-.4 3.4-3.2 6-6.6 6H34.1c-3.4 0-6.2-2.6-6.6-6z" fill="none" stroke="#8b949f" strokeWidth="1" />
+      <ellipse cx="50" cy="24" rx="29" ry="5.5" fill="url(#g-trash-rim)" stroke="#8b949f" strokeWidth="1" />
+      <ellipse cx="50" cy="24.5" rx="24" ry="3.5" fill="#6d7581" opacity="0.35" />
     </svg>
   ),
 };

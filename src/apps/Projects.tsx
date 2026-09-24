@@ -21,6 +21,7 @@ function Cover({ p, large = false }: { p: Project; large?: boolean }) {
         <span />
       </div>
       <span className="pj-cover-mark">{p.name.slice(0, 1)}</span>
+      <span className="pj-cover-glint" />
     </div>
   );
 }
@@ -130,6 +131,16 @@ export default function Projects() {
               }}
               onDoubleClick={() => setPreview(p.id)}
               onFocus={() => setSelected(p.id)}
+              onPointerMove={(e) => {
+                const r = e.currentTarget.getBoundingClientRect();
+                e.currentTarget.style.setProperty('--rx', `${((e.clientY - r.top) / r.height - 0.5) * -10}deg`);
+                e.currentTarget.style.setProperty('--ry', `${((e.clientX - r.left) / r.width - 0.5) * 12}deg`);
+                e.currentTarget.style.setProperty('--gx', `${((e.clientX - r.left) / r.width) * 100}%`);
+              }}
+              onPointerLeave={(e) => {
+                e.currentTarget.style.setProperty('--rx', '0deg');
+                e.currentTarget.style.setProperty('--ry', '0deg');
+              }}
               aria-label={`${p.name}. ${p.summary} Double-click or press Space to preview.`}
             >
               <Cover p={p} />

@@ -4,17 +4,115 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="description" content="Pragun Bhatt, computer science undergrad at VIT-AP. A portfolio you log in to." />
-    <meta name="theme-color" content="#1B2230" />
+    <meta name="theme-color" content="#000000" />
     <title>Pragun Bhatt</title>
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,300..800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Geist+Mono:wght@300..700&family=Newsreader:ital,opsz,wght@0,6..72,200..700;1,6..72,300..500&family=Inter:opsz,wght@14..32,300..800&family=JetBrains+Mono:wght@400;600&family=Caveat:wght@500&display=swap"
       rel="stylesheet"
     />
+    <style>
+      /* Boot screen: inlined so it paints before any JavaScript loads. */
+      #boot {
+        position: fixed;
+        inset: 0;
+        z-index: 1000;
+        display: grid;
+        place-items: center;
+        background: #000;
+        transition: opacity 0.7s ease, visibility 0.7s;
+      }
+      #boot.is-done {
+        opacity: 0;
+        visibility: hidden;
+      }
+      #boot .boot-inner {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 44px;
+        transition: transform 0.7s cubic-bezier(0.2, 0.85, 0.25, 1);
+      }
+      #boot.is-done .boot-inner {
+        transform: scale(0.96);
+      }
+      #boot .boot-mark {
+        width: 76px;
+        height: 76px;
+        border-radius: 22px;
+        display: grid;
+        place-items: center;
+        color: #000;
+        background: #f5f5f7;
+        font: 800 30px/1 -apple-system, BlinkMacSystemFont, 'Inter', system-ui, sans-serif;
+        letter-spacing: -0.03em;
+        box-shadow: 0 0 60px rgba(255, 255, 255, 0.12);
+      }
+      #boot .boot-bar {
+        width: 190px;
+        height: 5px;
+        border-radius: 999px;
+        background: #3a3a3c;
+        overflow: hidden;
+      }
+      #boot .boot-fill {
+        height: 100%;
+        width: 4%;
+        border-radius: inherit;
+        background: #f5f5f7;
+        transition: width 0.45s cubic-bezier(0.3, 0.7, 0.3, 1);
+      }
+      @media (prefers-reduced-motion: reduce) {
+        #boot,
+        #boot .boot-inner,
+        #boot .boot-fill {
+          transition-duration: 0.01ms;
+        }
+      }
+    </style>
   </head>
   <body>
+    <div id="boot" role="progressbar" aria-label="Loading portfolio" aria-valuemin="0" aria-valuemax="100" aria-valuenow="4">
+      <div class="boot-inner">
+        <div class="boot-mark" aria-hidden="true">PB</div>
+        <div class="boot-bar"><div class="boot-fill"></div></div>
+      </div>
+    </div>
+    <script>
+      (function () {
+        var start = Date.now();
+        var el = document.getElementById('boot');
+        var fill = el.querySelector('.boot-fill');
+        var shown = 0.04;
+        function set(p) {
+          if (p <= shown) return;
+          shown = p;
+          fill.style.width = Math.round(p * 100) + '%';
+          el.setAttribute('aria-valuenow', String(Math.round(p * 100)));
+        }
+        window.__boot = {
+          progress: set,
+          done: function () {
+            set(1);
+            // Keep the boot screen up long enough to read as intentional, not a flash.
+            var wait = Math.max(0, 1100 - (Date.now() - start));
+            setTimeout(function () {
+              el.classList.add('is-done');
+              setTimeout(function () {
+                el.remove();
+              }, 800);
+            }, wait + 250);
+          },
+        };
+        set(0.12);
+        // Never trap visitors behind the boot screen if the 3D scene can't start.
+        setTimeout(function () {
+          if (document.getElementById('boot')) window.__boot.done();
+        }, 9000);
+      })();
+    </script>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

@@ -4,6 +4,7 @@ import { appById } from './registry';
 import { Glyph } from './icons';
 import { launchApp } from './Dock';
 import { profile } from '../content';
+import ControlCenter from './ControlCenter';
 
 type Item = { label: string; action?: () => void; disabled?: boolean; shortcut?: string } | 'sep';
 type Menu = { id: string; label: React.ReactNode; aria: string; bold?: boolean; items: Item[] };
@@ -31,7 +32,7 @@ export default function MenuBar({ onLock }: { onLock: () => void }) {
   useEffect(() => {
     if (!open) return;
     const onDown = (e: PointerEvent) => {
-      if (!barRef.current?.contains(e.target as Node)) setOpen(null);
+      if (!barRef.current?.contains(e.target as Node) && !(e.target as HTMLElement).closest?.('.cc')) setOpen(null);
     };
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setOpen(null);
     window.addEventListener('pointerdown', onDown);
@@ -164,14 +165,21 @@ export default function MenuBar({ onLock }: { onLock: () => void }) {
         <span className="mb-status" aria-hidden="true">
           <Glyph.Search />
         </span>
-        <span className="mb-status" aria-hidden="true">
+        <button
+          type="button"
+          className={`mb-status ${open === 'cc' ? 'is-open' : ''}`}
+          aria-label="Control Center"
+          aria-expanded={open === 'cc'}
+          onClick={() => setOpen((o) => (o === 'cc' ? null : 'cc'))}
+        >
           <Glyph.Control />
-        </span>
+        </button>
         <time className="mb-clock" dateTime={now.toISOString()}>
           <span>{date}</span>
           <span>{time}</span>
         </time>
       </div>
+      {open === 'cc' && <ControlCenter />}
     </header>
   );
 }

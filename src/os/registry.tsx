@@ -1,5 +1,6 @@
 import type { ComponentType } from 'react';
 import type { AppId, Rect } from './store';
+import Finder from '../apps/Finder';
 import About from '../apps/About';
 import Academics from '../apps/Academics';
 import Projects from '../apps/Projects';
@@ -22,6 +23,7 @@ export type AppDef = {
 };
 
 export const apps: AppDef[] = [
+  { id: 'finder', title: 'Finder', dockLabel: 'Finder', size: { w: 820, h: 520 }, min: { w: 520, h: 340 }, Component: Finder, chrome: 'toolbar' },
   { id: 'about', title: 'About Me', dockLabel: 'About Me', size: { w: 720, h: 560 }, min: { w: 420, h: 360 }, Component: About, chrome: 'plain' },
   { id: 'academics', title: 'Academics', dockLabel: 'Academics', size: { w: 760, h: 580 }, min: { w: 440, h: 380 }, Component: Academics, chrome: 'plain' },
   { id: 'projects', title: 'Projects', dockLabel: 'Projects', size: { w: 900, h: 580 }, min: { w: 560, h: 380 }, Component: Projects, chrome: 'toolbar' },
@@ -35,10 +37,10 @@ export const apps: AppDef[] = [
 
 export const appById = Object.fromEntries(apps.map((a) => [a.id, a])) as Record<AppId, AppDef>;
 
-export const MENUBAR_H = 26;
+export const MENUBAR_H = 30;
 
 export function workArea(dockSize: number) {
-  const dockReserve = dockSize + 22;
+  const dockReserve = dockSize + 30;
   return {
     x: 0,
     y: MENUBAR_H,
